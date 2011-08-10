@@ -553,6 +553,14 @@ public:
 		return (m_last_drawn_sectors.find(p) != NULL);
 	}
 	
+	void save(bool only_changed);
+	void saveMapMeta();
+	void saveSectorMeta(ServerMapSector *sector);
+	void saveBlock(MapBlock *block);
+	void createDirs(std::string path);
+	std::string getSectorDir(v2s16 pos, int layout = 2);
+	std::string getBlockFilename(v3s16 p);
+
 private:
 	Client *m_client;
 	

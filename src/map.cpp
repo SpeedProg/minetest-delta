@@ -3880,6 +3880,177 @@ void ClientMap::PrintInfo(std::ostream &out)
 	out<<"ClientMap: ";
 }
 
+void ClientMap::save(bool only_changed)
+{
+	DSTACK(__FUNCTION_NAME);
+	
+	if(only_changed == false)
+		dstream<<DTIME<<"ServerMap: Saving whole map, this can take time."
+				<<std::endl;
+
+	u32 sector_meta_count = 0;
+	u32 block_count = 0;
+	u32 block_count_all = 0; // Number of blocks in memory
+	
+	core::map<v2s16, MapSector*>::Iterator i = m_sectors.getIterator();
+	for(; i.atEnd() == false; i++)
+	{
+		ServerMapSector *sector = (ServerMapSector*)i.getNode()->getValue();
+		//assert(sector->getId() == MAPSECTOR_SERVER);
+	
+		if(sector->differs_from_disk || only_changed == false)
+		{
+			saveSectorMeta(sector);
+			sector_meta_count++;
+		}
+		core::list<MapBlock*> blocks;
+		sector->getBlocks(blocks);
+		core::list<MapBlock*>::Iterator j;
+		for(j=blocks.begin(); j!=blocks.end(); j++)
+		{
+			MapBlock *block = *j;
+			
+			block_count_all++;
+
+			if(block->getModified() >= MOD_STATE_WRITE_NEEDED 
+					|| only_changed == false)
+			{
+				saveBlock(block);
+				block_count++;
+
+				/*dstream<<"ServerMap: Written block ("
+						<<block->getPos().X<<","
+						<<block->getPos().Y<<","
+						<<block->getPos().Z<<")"
+						<<std::endl;*/
+			}
+		}
+	}
+
+	/*
+		Only print if something happened or saved whole map
+	*/
+	if(only_changed == false || sector_meta_count != 0
+			|| block_count != 0)
+	{
+		dstream<<DTIME<<"ServerMap: Written: "
+				<<sector_meta_count<<" sector metadata files, "
+				<<block_count<<" block files"
+				<<", "<<block_count_all<<" blocks in memory."
+				<<std::endl;
+	}
+}
+
+void ClientMap::saveMapMeta()
+{
+
+}
+
+void ClientMap::saveSectorMeta(ServerMapSector *sector)
+{
+	DSTACK(__FUNCTION_NAME);
+	// Format used for writing
+	u8 version = SER_FMT_VER_HIGHEST;
+	// Get destination
+	v2s16 pos = sector->getPos();
+	std::string dir = getSectorDir(pos);
+	createDirs(dir);
+	
+	std::string fullpath = dir + "/meta";
+	std::ofstream o(fullpath.c_str(), std::ios_base::binary);
+	if(o.good() == false)
+		throw FileNotGoodException("Cannot open sector metafile");
+
+	sector->serialize(o, version);
+	
+	sector->differs_from_disk = false;
+}
+
+void ClientMap::saveBlock(MapBlock *block)
+{
+	DSTACK(__FUNCTION_NAME);
+	/*
+		Dummy blocks are not written
+	*/
+	if(block->isDummy())
+	{
+		/*v3s16 p = block->getPos();
+		dstream<<"ServerMap::saveBlock(): WARNING: Not writing dummy block "
+				<<"("<<p.X<<","<<p.Y<<","<<p.Z<<")"<<std::endl;*/
+		return;
+	}
+
+	// Format used for writing
+	u8 version = SER_FMT_VER_HIGHEST;
+	// Get destination
+	v3s16 p3d = block->getPos();
+	
+	v2s16 p2d(p3d.X, p3d.Z);
+	std::string sectordir = getSectorDir(p2d);
+
+	createDirs(sectordir);
+
+	std::string fullpath = sectordir+"/"+getBlockFilename(p3d);
+	std::ofstream o(fullpath.c_str(), std::ios_base::binary);
+	if(o.good() == false)
+		throw FileNotGoodException("Cannot open block data");
+
+	/*
+		[0] u8 serialization version
+		[1] data
+	*/
+	o.write((char*)&version, 1);
+	
+	// Write basic data
+	block->serialize(o, version);
+	
+	// Write extra data stored on disk
+	block->serializeDiskExtra(o, version);
+
+	// We just wrote it to the disk so clear modified flag
+	block->resetModified();
+}
+
+void ClientMap::createDirs(std::string path)
+{
+	if(fs::CreateAllDirs(path) == false)
+	{
+		m_dout<<DTIME<<"ServerMap: Failed to create directory "
+				<<"\""<<path<<"\""<<std::endl;
+		throw BaseException("ServerMap failed to create directory");
+	}
+}
+
+std::string ClientMap::getSectorDir(v2s16 pos, int layout)
+{
+	std::string m_savedir = porting::path_userdata+"/world";
+	char cc[9];
+	switch(layout)
+	{
+		case 1:
+			snprintf(cc, 9, "%.4x%.4x",
+				(unsigned int)pos.X&0xffff,
+				(unsigned int)pos.Y&0xffff);
+
+			return m_savedir + "/sectors/" + cc;
+		case 2:
+			snprintf(cc, 9, "%.3x/%.3x",
+				(unsigned int)pos.X&0xfff,
+				(unsigned int)pos.Y&0xfff);
+
+			return m_savedir + "/sectors2/" + cc;
+		default:
+			assert(false);
+	}
+}
+
+std::string ClientMap::getBlockFilename(v3s16 p)
+{
+	char cc[5];
+	snprintf(cc, 5, "%.4x", (unsigned int)p.Y&0xffff);
+	return cc;
+}
+
 #endif // !SERVER
 
 /*
