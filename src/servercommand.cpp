@@ -18,6 +18,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "servercommand.h"
 #include "utility.h"
+#include <sstream>
 
 void cmd_status(std::wostringstream &os,
 	ServerCommandContext *ctx)
@@ -227,6 +228,109 @@ void cmd_banunban(std::wostringstream &os, ServerCommandContext *ctx)
 	}
 }
 
+void cmd_ticket(std::wostringstream &os, ServerCommandContext *ctx)
+{
+	dstream<<"entering cmd_ticket"<<std::endl;
+	if(ctx->parms.size() < 2)
+	{
+		os<<L"-!- Available ticket commands are: /#ticket new <desc> <message>, /#ticket list";
+		if((ctx->privs & PRIV_TICKET) != 0)
+			os<<L"<, /#ticket answer <id> <message>, /#ticket close <id>";
+		return;
+	}
+
+	if(ctx->parms[1] == L"new"){
+		dstream<<"New ticket!"<<std::endl;
+		if(ctx->parms.size() < 4)
+		{
+			os<<L"-!- /#ticket new <desc> <message>";
+			return;
+		}
+		std::wstringstream message(std::ios_base::in | std::ios_base::out);
+
+		for(unsigned int i = 3; i<ctx->parms.size(); i++)
+		{
+			dstream<<"parm "<<i<<std::endl;
+			message<<ctx->parms[i]<<L" ";
+		}
+
+		bool valid = ctx->server->addTicket(ctx->player->getName(),
+				ctx->parms[2], message.str());
+		if(valid)
+			os<<L"-!- Ticket has been added!";
+		else
+			os<<L"-!- Your command was wrong, musst be: /ticket new <desc> <message>";
+		return;
+	}
+	if(ctx->parms[1] == L"list")
+	{
+		os<<ctx->server->getTicketList(ctx->player->getName(), (ctx->privs & PRIV_TICKET));
+		return;
+	}
+	if(ctx->parms[1] == L"read")
+	{
+		if(ctx->parms.size() != 3)
+		{
+			os<<L"-!- Wrong format, format is: /#ticket read <id>";
+			return;
+		}
+		unsigned int id = stoi(wide_to_narrow(ctx->parms[2]));
+		// TODO: check if format was int
+		std::wstring ticket = ctx->server->getTicket(id, ctx->player->getName(), (ctx->privs & PRIV_TICKET));
+		if(ticket == L"")
+		{
+			os<<L"-!- You do not have a ticket with ID: "<<id;
+			return;
+		}
+		os<<ticket;
+		return;
+	}
+	if(ctx->parms[1] == L"answer")
+	{
+		if(ctx->parms.size() < 4)
+		{
+			os<<"-!- /#ticket answer <id> <message>";
+			return;
+		}
+
+		std::wstringstream message(std::ios_base::in | std::ios_base::out);
+		for(unsigned int i = 3; i<ctx->parms.size(); i++)
+			message<<ctx->parms[i]<<L" ";
+		int id = stoi(wide_to_narrow(ctx->parms[2]));
+		// TODO: check if it is a number!
+		bool notclosed = ctx->server->answerTicket(id, ctx->player->getName(), message.str(),
+				(ctx->privs & PRIV_TICKET));
+		if(notclosed)
+			os<<L"-!- answered to ticket "<<ctx->parms[2];
+		else
+			os<<L"-!- you can not answer to ticket "<<ctx->parms[2]
+				<<L" anymore, it is closed! Or wrong ID.";
+		return;
+	}
+	if((ctx->privs & PRIV_TICKET) == 0)
+	{
+		os<<L"-!- You are only allowed to do: /#ticket new, /#ticket list, /#ticket answer";
+		return;
+	}
+	if(ctx->parms[1] == L"close")
+	{
+		if(ctx->parms.size() < 3)
+		{
+			os<<L"-!- /#ticket close <id>";
+			return;
+		}
+
+		unsigned int id = atoi(wide_to_narrow(ctx->parms[2]).c_str());
+		bool success = ctx->server->closeTicket(id);
+		if(success)
+			os<<L"-!- ticket "<<ctx->parms[2]<<" has been closed!";
+		else
+			os<<L"-!- there is no ticket "<<ctx->parms[2];
+		return;
+	}
+	os<<L"-!- No command /#ticket "<<ctx->parms[1]<<L" !";
+}
+
 
 std::wstring processServerCommand(ServerCommandContext *ctx)
 {
@@ -250,6 +354,9 @@ std::wstring processServerCommand(ServerCommandContext *ctx)
 			os<<L" grant revoke";
 		if(privs & PRIV_BAN)
 			os<<L" ban unban";
+		os<<" ticket new";
+		if(privs & PRIV_TICKET)
+			os<<L" 'ticket list' 'ticket answer' 'ticket close'";
 	}
 	else if(ctx->parms[0] == L"status")
 	{
@@ -282,6 +389,10 @@ std::wstring processServerCommand(ServerCommandContext *ctx)
 	else if(ctx->parms[0] == L"ban" || ctx->parms[0] == L"unban")
 	{
 		cmd_banunban(os, ctx);
+	}
+	else if(ctx->parms[0] == L"ticket")
+	{
+		cmd_ticket(os, ctx);
 	}
 	else
 	{

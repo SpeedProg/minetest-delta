@@ -30,6 +30,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "inventory.h"
 #include "auth.h"
 #include "ban.h"
+#include "ticketManager.h"
 
 /*
 	Some random functions
@@ -478,6 +479,34 @@ public:
 		return m_con.GetPeerNoEx(peer_id);
 	}
 
+	bool addTicket(const std::string &name, const std::wstring &desc,
+		       const std::wstring &message)
+	{
+		dstream<<"addTicket"<<std::endl;
+		return m_ticketmanager.add(name, desc, message);
+	}
+
+	std::wstring getTicketList(const std::string &name, const bool &priv)
+	{
+		return m_ticketmanager.getList(name, priv);
+	}
+
+	bool answerTicket(const unsigned int &id, const std::string &name,
+			const std::wstring &message, const bool &priv)
+	{
+		return m_ticketmanager.answer(id, name, message, priv);
+	}
+
+	std::wstring getTicket(const unsigned int &id, const std::string &name, const bool &priv)
+	{
+		return m_ticketmanager.getTicket(id, name, priv);
+	}
+
+	bool closeTicket(const unsigned int &id)
+	{
+		return m_ticketmanager.close(id);
+	}
+
 private:
 
 	// con::PeerHandler implementation.
@@ -592,6 +621,9 @@ private:
 
 	// Bann checking
 	BanManager m_banmanager;
+
+	// Ticket Manager
+	TicketManager m_ticketmanager;
 	
 	/*
 		Threads

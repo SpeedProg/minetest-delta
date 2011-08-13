@@ -1064,6 +1064,7 @@ Server::Server(
 	m_con(PROTOCOL_ID, 512, CONNECTION_TIMEOUT, this),
 	m_authmanager(mapsavedir+"/auth.txt"),
 	m_banmanager(mapsavedir+"/ipban.txt"),
+	m_ticketmanager(mapsavedir+"/tickets.txt"),
 	m_thread(this),
 	m_emergethread(this),
 	m_time_counter(0),
@@ -1839,6 +1840,10 @@ void Server::AsyncRunStep()
 			//Bann stuff
 			if(m_banmanager.isModified())
 				m_banmanager.save();
+
+			//Ticket stuff
+			if(m_ticketmanager.isModified())
+				m_ticketmanager.save();
 			
 			// Map
 			JMutexAutoLock lock(m_env_mutex);
